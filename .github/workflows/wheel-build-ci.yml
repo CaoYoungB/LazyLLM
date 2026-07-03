@@ -1,0 +1,51 @@
+name: Build Wheel Test
+
+on:
+  push:
+    branches:
+      - fix/release-wheel-build
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.10.9"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-wheel-with-cpp-extension:
+    name: Build wheels with native extensions (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build wheel
+        run: |
+          pip install cibuildwheel tomlkit
+          cp pyproject.toml pyproject.toml.backup
+          python scripts/generate_toml_optional_deps.py --split
+          cibuildwheel --output-dir repaired_wheel
+          ls -la repaired_wheel/
+          mv pyproject.toml.backup pyproject.toml
+        env:
+          CIBW_BUILD_VERBOSITY: 1
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: repaired_wheel/*.whl
+          retention-days: 3
